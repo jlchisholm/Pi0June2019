@@ -5,7 +5,7 @@
 //  Jenna Chisholm                                                           //
 //  August 12, 2020                                                          //
 //                                                                           //
-//  Last Updated: September 10, 2020                                         //
+//  Last Updated: September 10, 2020   (old version I guess??)               //
 //                                                                           //
 //  Reads in full target and empty target results and divides their Tagger   //
 //  counts to get the scaling factors for empty target subtraction. Then     //

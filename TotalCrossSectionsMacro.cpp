@@ -1,4 +1,4 @@
-///////////////////////////////////////////////////////////////////////////////
+﻿///////////////////////////////////////////////////////////////////////////////
 //                                                                           //
 //  TotalCrossSectionsMacro.cpp                                              //
 //                                                                           //
@@ -36,57 +36,141 @@ using namespace std;
 // channel and converts it to a function of photon energy based on a given
 // Tagger conversion file for the beamtime
 // Input: conversion file name, histogram to be converted, Output: converted histogram
-TH1D* TaggChanToEnergy(TString sFile, TH1D *hCrossSec)
+TH1D* Tagg_Chan_To_Energy1D(TString sFile, TH1 *hChan, TString sAxis="X")
 {
-    TTree *tTagg = new TTree("tTagg","tTagg");            // TTree for conversion?
-    tTagg->ReadFile(sFile, "Channel:Energy");             // read conversion file into tree
-    int iTagg = tTagg->Draw("Channel:Energy","","goff");  // get the number of channels/energies?
-    double *dTaggCh = tTagg->GetV1();                     // first column in file/tree is channel
-    double *dTaggEn = tTagg->GetV2();                     // second column in file/tree is energy
+  TTree *tTagg = new TTree("tTagg", "tTagg");
+  tTagg->ReadFile(sFile, "Channel:Energy");
+  Int_t iTagg = tTagg->Draw("Channel:Energy", "", "goff");
+  Double_t *dTaggCh = tTagg->GetV1();
+  Double_t *dTaggEn = tTagg->GetV2();
 
-    // I think we're checking the order of things
-    bool bRevrCh = (dTaggCh[1] < dTaggCh [0]);   // check if channels are in descending order
-    bool bRevrEn = (dTaggEn[1] < dTaggEn[0]);    // check if energies are in descending order
-    bool bSumw2 = (hCrossSec->GetSumw2N() > 0);  // sum of weights(???) positive?
+  Bool_t bRevrCh = (dTaggCh[1] < dTaggCh[0]);
+  Bool_t bRevrEn = (dTaggEn[1] < dTaggEn[0]);
+  Bool_t bSumw2 = (hChan->GetSumw2N() > 0);
 
-    double *dTaggBn;                  // for lowest value of tagger bins
-    dTaggBn = new double[iTagg+1];    // set it to be an array of length # of bins
+  Double_t *dTaggBn;
+  dTaggBn = new Double_t[iTagg+1];
 
-    // So we're going through and getting the lowest value/edge in each bin?
-    for (int i=0; i<=iTagg; i++)
-    {
-        if (bRevrEn) // if energy is in descending order, we'll need to go backwards through indices (i.e. iTagg-i)
-        {
-            if (i==0) dTaggBn[0] = (dTaggEn[iTagg-1] + 0.5*(dTaggEn[iTagg-1] - dTaggEn[iTagg-2]));
-            else if (i==iTagg) dTaggBn[iTagg] = (dTaggEn[0] + 0.5*(dTaggEn[0] - dTaggEn[1]));
-            else dTaggBn[i] = 0.5*(dTaggEn[iTagg-1-i] + dTaggEn[iTagg-i]);
-        }
-        else
-        {
+  for (Int_t i=0; i<=iTagg; i++)
+  {
+      if (bRevrEn)
+      {
+          if (i==0) dTaggBn[0] = (dTaggEn[iTagg-1] + 0.5*(dTaggEn[iTagg-1] - dTaggEn[iTagg-2]));
+          else if (i==iTagg) dTaggBn[iTagg] = (dTaggEn[0] + 0.5*(dTaggEn[0] - dTaggEn[1]));
+          else dTaggBn[i] = 0.5*(dTaggEn[iTagg-1-i] + dTaggEn[iTagg-i]);
+      }
+      else
+      {
           if (i==0) dTaggBn[0] = (dTaggEn[0] + 0.5*(dTaggEn[0] - dTaggEn[1]));
           else if (i==iTagg) dTaggBn[iTagg] = (dTaggEn[iTagg-1] + 0.5*(dTaggEn[iTagg-1] - dTaggEn[iTagg-2]));
-          else dTaggBn[i] = 0.5*(dTaggEn[i-1] + dTaggEn[i]);  // low edge bin energy is the average of this energy and the previous energy
-        }
-    }
+          else dTaggBn[i] = 0.5*(dTaggEn[i-1] + dTaggEn[i]);
+      }
+  }
 
-    // Plot
-    TH1D *hTaggCS = new TH1D("hTaggCS", "Pi0 Production Total Cross Section from 150MeV to 350MeV", iTagg, dTaggBn);
+  TH1D *hEner = (TH1D*)hChan->Clone("hEner");
+  hEner->Reset();
 
-    for (int i=0; i<iTagg; i++)
-    {
-        if (bRevrCh == bRevrEn) // if both channels and energies are both descending order or both are in ascending order
-        {
-            hTaggCS->SetBinContent(i+1, hCrossSec->GetBinContent(i+1));
-            if (bSumw2) hTaggCS->SetBinError(i+1, hCrossSec->GetBinError(i+1));
-        }
-        else // basically if channels are ascending but energies are descending or vice versa
-        {
-            hTaggCS->SetBinContent(i+1, hCrossSec->GetBinContent(iTagg-i));
-            if (bSumw2) hTaggCS->SetBinError(i+1, hCrossSec->GetBinError(iTagg-i));
-        }
-    }
+  TAxis *axis;
+  if (sAxis == "x" || sAxis == "X") axis = hEner->GetXaxis();
+  else if (sAxis == "y" || sAxis == "Y") axis = hEner->GetYaxis();
+  else if (sAxis == "z" || sAxis == "Z") axis = hEner->GetZaxis();
 
-    return hTaggCS;
+  if (axis->GetNbins() != iTagg) cout << "WARNING - Different number of bins between config file and histogram!" << endl << "This could lead to unexpected results!" << endl;
+  axis->Set(iTagg, dTaggBn);
+
+  Int_t iOld, iNew;
+  for (Int_t iX=1; iX<=hChan->GetNbinsX(); iX++)
+  {
+      for (Int_t iY=1; iY<=hChan->GetNbinsY(); iY++)
+      {
+          for (Int_t iZ=1; iZ<=hChan->GetNbinsZ(); iZ++)
+          {
+              iOld = hChan->GetBin(iX, iY, iZ);
+              if (bRevrCh == bRevrEn) iNew = hEner->GetBin(iX, iY, iZ);
+              else
+              {
+                  if (sAxis == "x" || sAxis == "X") iNew = hEner->GetBin(iTagg-iX+1, iY, iZ);
+                  else if (sAxis == "y" || sAxis == "Y") iNew = hEner->GetBin(iX, iTagg-iY+1, iZ);
+                  else if (sAxis == "z" || sAxis == "Z") iNew = hEner->GetBin(iX, iY, iTagg-iZ+1);
+              }
+              hEner->SetBinContent(iNew, hChan->GetBinContent(iOld));
+              if (bSumw2) hEner->SetBinError(iNew, hChan->GetBinError(iOld));
+          }
+      }
+  }
+
+  return hEner;
+}
+
+
+// Another method written by Phil which takes in a 3D histogram that is a function of Tagger
+// channel and converts it to a function of photon energy based on a given
+// Tagger conversion file for the beamtime
+// Input: conversion file name, histogram to be converted, axis that Tagger channel is on, Output: converted histogram
+TH3* Tagg_Chan_To_Ener(TString sFile, TH3 *hChan, TString sAxis="X")
+{
+  TTree *tTagg = new TTree("tTagg", "tTagg");
+  tTagg->ReadFile(sFile, "Channel:Energy");
+  Int_t iTagg = tTagg->Draw("Channel:Energy", "", "goff");
+  Double_t *dTaggCh = tTagg->GetV1();
+  Double_t *dTaggEn = tTagg->GetV2();
+
+  Bool_t bRevrCh = (dTaggCh[1] < dTaggCh[0]);
+  Bool_t bRevrEn = (dTaggEn[1] < dTaggEn[0]);
+  Bool_t bSumw2 = (hChan->GetSumw2N() > 0);
+
+  Double_t *dTaggBn;
+  dTaggBn = new Double_t[iTagg+1];
+
+  for (Int_t i=0; i<=iTagg; i++)
+  {
+      if (bRevrEn)
+      {
+          if (i==0) dTaggBn[0] = (dTaggEn[iTagg-1] + 0.5*(dTaggEn[iTagg-1] - dTaggEn[iTagg-2]));
+          else if (i==iTagg) dTaggBn[iTagg] = (dTaggEn[0] + 0.5*(dTaggEn[0] - dTaggEn[1]));
+          else dTaggBn[i] = 0.5*(dTaggEn[iTagg-1-i] + dTaggEn[iTagg-i]);
+      }
+      else
+      {
+          if (i==0) dTaggBn[0] = (dTaggEn[0] + 0.5*(dTaggEn[0] - dTaggEn[1]));
+          else if (i==iTagg) dTaggBn[iTagg] = (dTaggEn[iTagg-1] + 0.5*(dTaggEn[iTagg-1] - dTaggEn[iTagg-2]));
+          else dTaggBn[i] = 0.5*(dTaggEn[i-1] + dTaggEn[i]);
+      }
+  }
+
+  TH3 *hEner = (TH3*)hChan->Clone("hEner");
+  hEner->Reset();
+
+  TAxis *axis;
+  if (sAxis == "x" || sAxis == "X") axis = hEner->GetXaxis();
+  else if (sAxis == "y" || sAxis == "Y") axis = hEner->GetYaxis();
+  else if (sAxis == "z" || sAxis == "Z") axis = hEner->GetZaxis();
+
+  if (axis->GetNbins() != iTagg) cout << "WARNING - Different number of bins between config file and histogram!" << endl << "This could lead to unexpected results!" << endl;
+  axis->Set(iTagg, dTaggBn);
+
+  Int_t iOld, iNew;
+  for (Int_t iX=1; iX<=hChan->GetNbinsX(); iX++)
+  {
+      for (Int_t iY=1; iY<=hChan->GetNbinsY(); iY++)
+      {
+          for (Int_t iZ=1; iZ<=hChan->GetNbinsZ(); iZ++)
+          {
+              iOld = hChan->GetBin(iX, iY, iZ);
+              if (bRevrCh == bRevrEn) iNew = hEner->GetBin(iX, iY, iZ);
+              else
+              {
+                  if (sAxis == "x" || sAxis == "X") iNew = hEner->GetBin(iTagg-iX+1, iY, iZ);
+                  else if (sAxis == "y" || sAxis == "Y") iNew = hEner->GetBin(iX, iTagg-iY+1, iZ);
+                  else if (sAxis == "z" || sAxis == "Z") iNew = hEner->GetBin(iX, iY, iTagg-iZ+1);
+              }
+              hEner->SetBinContent(iNew, hChan->GetBinContent(iOld));
+              if (bSumw2) hEner->SetBinError(iNew, hChan->GetBinError(iOld));
+          }
+      }
+  }
+
+  return hEner;
 }
 
 
@@ -122,17 +206,19 @@ double GetTotDetEff(int ke)
 // A function which draws the tagger counts histograms for full and empty target
 // data and makes a histogram for the scaling ratio
 // Input: tagger channel, output: scaling factor for that channel
-double GetScalingFactor(int ch, TFile *ftFile, TFile *etFile)
+double GetScalingFactor(int ke, TFile *ftFile, TFile *etFile)
 {
         // Get tagger count histograms
-        TH1F *hFull = (TH1F*)ftFile->Get("He4Pi0/h_ScalarCounts");
-        TH1F *hEmpty = (TH1F*)etFile->Get("He4Pi0/h_ScalarCounts");
+        TH1D *hFull = (TH1D*)ftFile->Get("He4Pi0/h_ScalarCounts");
+        TH1D *hEmpty = (TH1D*)etFile->Get("He4Pi0/h_ScalarCounts");
 
 	// Divide the full target data by empty target data to get a ratio
-	TH1F *hRatio = (TH1F*) hFull->Clone("hRatio");
+        TH1D *hRatio = (TH1D*) hFull->Clone("hRatio");
 	hRatio->Divide(hEmpty);
+
+        TH1D *hRatio_conv = Tagg_Chan_To_Energy1D("Tagger_Conversions_by_k_2019_06.txt",hRatio,"X");
 	
-        double factor = hRatio->GetBinContent(ch);
+        double factor = hRatio_conv->GetBinContent(ke);
 
 	return factor;
 }
@@ -144,35 +230,27 @@ double GetScalingFactor(int ch, TFile *ftFile, TFile *etFile)
 // A function that subtracts the empty target data from the full target data
 // Input: tagger channel you want to look at, output: counts in elastic peak
 // Currently: these histograms are being plotted and I don't know why or how
-int GetCounts(int ch, TFile *ftFile, TFile *etFile)
+int GetCounts(int ke, TH3* hFull_ME_3D_conv, TH3* hEmpty_ME_3D_conv, double scale)
 {
-        // LETS CONVERT BEFOREHAND LIKE IN THE DXS FILE
 
-	// Get 3D, 1 particle event ME Histograms
-        TH3D *hFull_ME_3D = (TH3D*)ftFile->Get("He4Pi0/h3D_MEpi0");
-        TH3D *hEmpty_ME_3D = (TH3D*)etFile->Get("He4Pi0/h3D_MEpi0");
-	
         // Project 3D histograms at input Tagger channel
-        TH1D *hFull_ME_projx = hFull_ME_3D->ProjectionX(Form("hME_projx_ch%d",ch),0,180,ch-1,ch);
-        TH1D *hEmpty_ME_projx = hEmpty_ME_3D->ProjectionX(Form("hEmpty_ME_projx_ch%d",ch),0,180,ch-1,ch);
-
-	// Get scaling factor
-        double scale = GetScalingFactor(ch, ftFile, etFile);
+        TH1D *hFull_ME_projx = hFull_ME_3D_conv->ProjectionX(Form("hME_projx_%dMeV",ke),0,180,ke-1,ke);
+        TH1D *hEmpty_ME_projx = hEmpty_ME_3D_conv->ProjectionX(Form("hEmpty_ME_projx_%dMeV",ke),0,180,ke-1,ke);
 
 	// Subtract empty from full with scaling
-        TH1D *hSubtracted = (TH1D*) hFull_ME_projx->Clone(Form("hSubtracted_ch%d",ch));
+        TH1D *hSubtracted = (TH1D*) hFull_ME_projx->Clone(Form("hSubtracted_%dMeV",ke));
         hSubtracted->Add(hEmpty_ME_projx, -scale); 
 
 	// Create a scaled version of the empty target histogram
-        TH1D *hEmpty_ME_scaled = (TH1D*) hEmpty_ME_projx->Clone(Form("hEmpty_ME_scaled_ch%d",ch));
-	hEmpty_ME_scaled->Scale(scale);
+        //TH1D *hEmpty_ME_scaled = (TH1D*) hEmpty_ME_projx->Clone(Form("hEmpty_ME_scaled_%dMeV",ke));
+        //hEmpty_ME_scaled->Scale(scale);
 	
 	// Create a fit for the subtracted data (gaussian for QF + gaussian for elastic)	
 	TF1 *fit = new TF1("fit", "gaus(0)+gaus(3)", -200, 200);
 
 	// Set fit parameters
 	fit->SetParNames("BG Constant", "BG Mean", "BG Sigma", "Peak Constant", "Peak Mean", "Peak Sigma");
-	fit->SetParameter("BG Mean", -30);
+        fit->SetParameter("BG Mean", -40);
 	fit->SetParameter("BG Sigma", 20);
 	fit->SetParameter("Peak Mean", 0);
 	fit->SetParameter("Peak Sigma", 5);
@@ -181,11 +259,38 @@ int GetCounts(int ch, TFile *ftFile, TFile *etFile)
 	double param[6];
         hSubtracted->Fit("fit","Q");
 	fit->GetParameters(&param[0]);
-	
+
 	// Create a fit to mimic that which was fit to the elastic peak and integrate it
-	TF1 *fPeak = new TF1("fit", "gaus", -200, 200);
-	fPeak->SetParameters(param[3],param[4],param[5]);
+	TF1 *fPeak = new TF1("fPeak", "gaus", -200, 200);
+        double mean, sigma, constant;
+        if (param[4] > param[1])
+        {
+            mean = param[4];
+            sigma = param[5];
+            constant = param[3];
+        }
+        else
+           {
+            mean = param[1];
+            sigma = param[2];
+            constant = param[0];
+        }
+        fPeak->SetParameters(constant,mean,sigma);
 	int counts = fPeak->Integral(-200,200);
+
+	// For plotting purposes only:
+//        TF1 *fOther = new TF1("fOther", "gaus",-200,200);
+//        fOther->SetParameters(param[0],param[1],param[2]);
+//        fPeak->SetLineColor(4);
+//	fPeak->Draw("SAME");
+//	fOther->SetLineColor(6);
+//	fOther->Draw("SAME");
+
+        if(counts < 0 || mean < -15)
+        {
+                cout << Form("Bad -> energy: %d, counts: %d, mean: %f",ke,counts,mean) << endl;
+                counts = 0;
+        }
 
 	return counts;
 }
@@ -194,8 +299,8 @@ int GetCounts(int ch, TFile *ftFile, TFile *etFile)
 // ----------------------- MAIN FUNCTION ------------------------- //
 
 
-// The main function that calculates the elastic counts at several photon energies and plots them,
-// and then calculates the total cross section
+//The main function that calculates the elastic counts at several photon energies and plots them,
+//and then calculates the total cross section
 void PlotCS()
 {
         // --------------------------- Open Files --------------------------- //
@@ -212,6 +317,15 @@ void PlotCS()
         TFile *tagFile = TFile::Open("~/TaggingEfficienciesJune2019/TaggEff-MOELLER-20.root");
         if(!tagFile->IsOpen()){cout << "Error: tagging efficiency file could not be opened.";exit(-1);}
 
+        // -------------------- Get 3D Histograms and Convert -------------------- //
+
+        // Get 3D, 1 particle event ME Histograms
+        TH3D *hFull_ME_3D = (TH3D*)ftFile->Get("He4Pi0/h3D_MEpi0");
+        TH3D *hEmpty_ME_3D = (TH3D*)etFile->Get("He4Pi0/h3D_MEpi0");
+
+        // Convert the 3D histograms to be a function of photon energy instead of Tagger channel
+        TH3 *hFull_ME_3D_conv = Tagg_Chan_To_Ener("Tagger_Conversions_by_k_2019_06.txt",hFull_ME_3D,"Z");
+        TH3 *hEmpty_ME_3D_conv = Tagg_Chan_To_Ener("Tagger_Conversions_by_k_2019_06.txt",hEmpty_ME_3D,"Z");
 
         // ------------------- Calculate Target Thickness ------------------- //
 
@@ -225,31 +339,57 @@ void PlotCS()
 
         // ------------- Get the Yield of Elastic Pi0 Production ------------- //
 
-        // Create a histogram to fill
-        TH1F *hElastic = new TH1F("hElastic", "Counts of Elastic Pi0 Production",368,0,368);
-        hElastic->GetXaxis()->SetTitle("Tagger Channel");   // want to change to photon energy
-	hElastic->GetYaxis()->SetTitle("Counts");	
 
-	// Go through the tagger channels and fill the histogram
-        for (int ch=76; ch<=267; ch++)
-	{
-                int counts = GetCounts(ch,ftFile,etFile);  // get the pi0 yield for the channel
-		for (int i=0; i<=counts; i++)              
-		{
-                        hElastic->Fill(ch);   // fill the yield histogram for every count pi0 we counted at that channel
+        // Create a histogram to fill
+        TH1F *hElastic = new TH1F("hElastic", "Counts of Elastic Pi0 Production",200,150,350);
+        hElastic->GetXaxis()->SetTitle("Incident Photon Energy (Pi0)");   // want to change to photon energy
+        hElastic->GetYaxis()->SetTitle("Counts");
+
+        // Go through the tagger channels and fill the histogram
+        for (int ke=150; ke<=350; ke++)
+        {
+                // Get scaling factor
+                double scale = GetScalingFactor(ke, ftFile, etFile);
+
+                // Get yield
+                int counts = GetCounts(ke,hFull_ME_3D_conv,hEmpty_ME_3D_conv, scale);  // get the pi0 yield for the channel
+                for (int i=0; i<=counts; i++)
+                {
+                        hElastic->Fill(ke);   // fill the yield histogram for every count pi0 we counted at that channel
                 }
-	}
+        }
 
 
         // ----------------- Get Tagging Efficiency Histogram ----------------- //
 
         TH1D* hTaggEff = (TH1D*)tagFile->Get("makeTaggEff/hist000");
+        TH1D* hTaggEff_conv = Tagg_Chan_To_Energy1D("Tagger_Conversions_by_k_2019_06.txt",hTaggEff,"X");
+
+        double m;
+        TH1D* hTaggEff_final = new TH1D("hTaggEff","Tagging Efficiency",200,150,350);
+        for(int ke=150; ke<=350; ke++)
+        {
+            m = hTaggEff_conv->GetBinContent(hTaggEff_conv->GetXaxis()->FindBin(ke));
+            hTaggEff_final->Fill(ke,m);
+            m = 0;
+        }
+
 
 
         // ------------------------ Get Tagger Scalars ------------------------ //
 
         // Also we'll need the tagger scalars histogram
-        TH1F* hScalars = (TH1F*)ftFile->Get("He4Pi0/h_ScalarCounts");
+        TH1D* hScalars = (TH1D*)ftFile->Get("He4Pi0/h_ScalarCounts");
+        TH1D* hScalars_conv = Tagg_Chan_To_Energy1D("Tagger_Conversions_by_k_2019_06.txt",hScalars,"X");
+
+        long int n;
+        TH1D* hScalars_final = new TH1D("hScalars", "Scalar Counts",200,150,350);
+        for(int ke=150; ke<=350; ke++)
+        {
+            n = hScalars_conv->GetBinContent(hScalars_conv->GetXaxis()->FindBin(ke));
+            hScalars_final->Fill(ke,n);
+            n = 0;
+        }
 
 
 
@@ -258,57 +398,77 @@ void PlotCS()
 
         // Calculate the total cross section histogram (=yield/Ne*taggeff*tt*edet)
         TH1D *hCrossSec = (TH1D*) hElastic->Clone("hCrossSec");
-        hCrossSec->Divide(hElastic,hScalars,1,tt);                            // divide yield by tagg scalars (Ne) and by target thickness
-        hCrossSec->Divide(hCrossSec,hTaggEff,TMath::Power(10,34),1);       // also divide by tagging efficiency and convert to microbarns
+        hCrossSec->Divide(hElastic,hScalars_final,1,tt);                            // divide yield by tagg scalars (Ne) and by target thickness
+        hCrossSec->Divide(hCrossSec,hTaggEff_final,TMath::Power(10,34),1);       // also divide by tagging efficiency and convert to microbarns
 
 
         // ----------------------- Draw the Histogram(s) ----------------------- //
 
         // Create a canvas
-        TCanvas *c1 = new TCanvas("c1","",200,10,1000,750);
+        TCanvas *c1 = new TCanvas("c1","",200,10,1000,1000);
 
-        // Need to clear first or the pi0 missing energy will plot underneath
+        // Temp:
         c1->Clear();
-        c1->Divide(2,1);
-	
-        // Draw the total cross section histogram as function of Tagger channel
-        c1->cd(1);
-        hCrossSec->SetTitle("Pi0 Production Total Cross Section from 150MeV to 350MeV w/out Edet");
-        hCrossSec->GetYaxis()->SetTitle("Total Cross Section (#mub)");
-	hCrossSec->GetXaxis()->SetRangeUser(76,267);   // this range is about 150MeV-350MeV
-	hCrossSec->Draw();
+//        c1->Divide(2,2);
+//        c1->cd(1);
+//        hTaggEff_conv->Draw();
+//        c1->cd(2);
+//        hTaggEff_final->Draw("HIST");
+//        c1->cd(3);
+//        hElastic->Draw();
+//        c1->cd(4);
+        c1->cd();
+        hCrossSec->Draw("HIST");
 
-        // Draw the total cross section histogram as a function of incident photon energy
-        TH1D *hCrossSec2 = TaggChanToEnergy("Tagger_Conversions_by_k_2019_06.txt", hCrossSec);
-        hCrossSec2->GetYaxis()->SetTitle("Total Cross Section w/out Edet (#mub)");
-        hCrossSec2->GetXaxis()->SetTitle("Incident Photon Energy (MeV)");
-        c1->cd(2);
-        hCrossSec2->Draw();
+
+//        // Need to clear first or the pi0 missing energy will plot underneath
+//        c1->Clear();
+//        c1->Divide(2,1);
+	
+//        // Draw the total cross section histogram as function of Tagger channel
+//        c1->cd(1);
+//        hCrossSec->SetTitle("Pi0 Production Total Cross Section from 150MeV to 350MeV w/out Edet");
+//        hCrossSec->GetYaxis()->SetTitle("Total Cross Section (#mub)");
+//	hCrossSec->GetXaxis()->SetRangeUser(76,267);   // this range is about 150MeV-350MeV
+//	hCrossSec->Draw();
+
+//        // Draw the total cross section histogram as a function of incident photon energy
+//        TH1D *hCrossSec2 = TaggChanToEnergy("Tagger_Conversions_by_k_2019_06.txt", hCrossSec);
+//        hCrossSec2->GetYaxis()->SetTitle("Total Cross Section w/out Edet (#mub)");
+//        hCrossSec2->GetXaxis()->SetTitle("Incident Photon Energy (MeV)");
+//        c1->cd(2);
+//        hCrossSec2->Draw();
 
 
         // --------------------- Get Detection Efficiency --------------------- //
 
 
         // Make a histogram for the proper total cross section points
-        TH1D *hCrossSecProper = new TH1D("hCrossSecProper", "Total Cross Sections",450,0,450);
+//        TH1D *hCrossSecProper = new TH1D("hCrossSecProper", "Total Cross Sections",450,0,450);
+//        hCrossSecProper->GetXaxis()->SetTitle("Incident Photon Energy (MeV)");
+//        hCrossSecProper->GetYaxis()->SetTitle("Total Cross Section (#mub)");
+
+//        // Fill the histogram with total cross section divided by Edet for the energies we have
+//        for(int k=150; k<=350; k+=25)
+//        {
+//            double Edet = GetTotDetEff(k);
+//            int bin = hCrossSec->GetXaxis()->FindBin(k);
+//            double xs = hCrossSec->GetBinContent(bin)/Edet;
+//            hCrossSecProper->SetBinContent(k,xs);
+//            //double error = hCrossSec2->GetBinError(bin);
+//            //hCrossSecProper->SetBinError(k,error);
+//        }
+
+        TH1D *hCrossSecProper = (TH1D*) hCrossSec->Clone("hCrossSecProper");
+        hCrossSecProper->SetTitle("Total Cross Sections");
         hCrossSecProper->GetXaxis()->SetTitle("Incident Photon Energy (MeV)");
         hCrossSecProper->GetYaxis()->SetTitle("Total Cross Section (#mub)");
-
-        // Fill the histogram with total cross section divided by Edet for the energies we have
-        for(int k=150; k<=350; k+=25)
-        {
-            double Edet = GetTotDetEff(k);
-            int bin = hCrossSec2->GetXaxis()->FindBin(k);
-            double xs = hCrossSec2->GetBinContent(bin)/Edet;
-            hCrossSecProper->SetBinContent(k,xs);
-            double error = hCrossSec2->GetBinError(bin);
-            hCrossSecProper->SetBinError(k,error);
-        }
+        hCrossSecProper->Scale(1/GetTotDetEff(200));
 
         // Create a canvas
         TCanvas *c2 = new TCanvas("c2","",200,10,750,750);
         c2->cd();
-        hCrossSecProper->Draw("E0");
+        hCrossSecProper->Draw("HIST");
 
 
 
@@ -320,12 +480,12 @@ void PlotCS()
                      "Target Thickness: %f \n"
                      "Det Eff: %f \n"
                      "Total Cross Sec: %f \n",
-                     hElastic->GetBinContent(hElastic->GetXaxis()->FindBin(112)),
-                     hScalars->GetBinContent(hScalars->GetXaxis()->FindBin(112)),
-                     hTaggEff->GetBinContent(hTaggEff->GetXaxis()->FindBin(112)),
+                     hElastic->GetBinContent(hElastic->GetXaxis()->FindBin(200)),
+                     hScalars_final->GetBinContent(hScalars->GetXaxis()->FindBin(200)),
+                     hTaggEff_final->GetBinContent(hTaggEff->GetXaxis()->FindBin(200)),
                      tt,
                      GetTotDetEff(200),
-                     hCrossSecProper->Integral(195,205)
+                     hCrossSecProper->Integral(200,201)
                      );
 
 
