@@ -190,7 +190,7 @@ double GetTotDetEff(int ke)
     }
     TH1D* hEdet = (TH1D*)edetFile->Get("hDetEff");
 
-    double Edet = hEdet->Integral()/180.0;
+    double Edet = hEdet->Integral()/18.0;
 
     //double in = hThetaIn->Integral();
     //double out = hThetaOut->Integral();
@@ -218,7 +218,7 @@ double GetScalingFactor(int ke, TFile *ftFile, TFile *etFile)
 
         TH1D *hRatio_conv = Tagg_Chan_To_Energy1D("Tagger_Conversions_by_k_2019_06.txt",hRatio,"X");
 	
-        double factor = hRatio_conv->GetBinContent(ke);
+        double factor = hRatio_conv->GetBinContent(hRatio_conv->GetXaxis()->FindBin(ke));
 
 	return factor;
 }
@@ -233,9 +233,12 @@ double GetScalingFactor(int ke, TFile *ftFile, TFile *etFile)
 int GetCounts(int ke, TH3* hFull_ME_3D_conv, TH3* hEmpty_ME_3D_conv, double scale)
 {
 
+
+        int kebin = hFull_ME_3D_conv->GetZaxis()->FindBin(ke);
+
         // Project 3D histograms at input Tagger channel
-        TH1D *hFull_ME_projx = hFull_ME_3D_conv->ProjectionX(Form("hME_projx_%dMeV",ke),0,180,ke-1,ke);
-        TH1D *hEmpty_ME_projx = hEmpty_ME_3D_conv->ProjectionX(Form("hEmpty_ME_projx_%dMeV",ke),0,180,ke-1,ke);
+        TH1D *hFull_ME_projx = hFull_ME_3D_conv->ProjectionX(Form("hME_projx_%dMeV",ke),0,-1,kebin,kebin+1);
+        TH1D *hEmpty_ME_projx = hEmpty_ME_3D_conv->ProjectionX(Form("hEmpty_ME_projx_%dMeV",ke),0,-1,kebin,kebin+1);
 
 	// Subtract empty from full with scaling
         TH1D *hSubtracted = (TH1D*) hFull_ME_projx->Clone(Form("hSubtracted_%dMeV",ke));
@@ -261,7 +264,7 @@ int GetCounts(int ke, TH3* hFull_ME_3D_conv, TH3* hEmpty_ME_3D_conv, double scal
 	fit->GetParameters(&param[0]);
 
 	// Create a fit to mimic that which was fit to the elastic peak and integrate it
-	TF1 *fPeak = new TF1("fPeak", "gaus", -200, 200);
+        TF1 *fPeak = new TF1("fPeak", "gaus", -200, 200);
         double mean, sigma, constant;
         if (param[4] > param[1])
         {
@@ -444,30 +447,37 @@ void PlotCS()
 
 
         // Make a histogram for the proper total cross section points
-//        TH1D *hCrossSecProper = new TH1D("hCrossSecProper", "Total Cross Sections",450,0,450);
-//        hCrossSecProper->GetXaxis()->SetTitle("Incident Photon Energy (MeV)");
-//        hCrossSecProper->GetYaxis()->SetTitle("Total Cross Section (#mub)");
-
-//        // Fill the histogram with total cross section divided by Edet for the energies we have
-//        for(int k=150; k<=350; k+=25)
-//        {
-//            double Edet = GetTotDetEff(k);
-//            int bin = hCrossSec->GetXaxis()->FindBin(k);
-//            double xs = hCrossSec->GetBinContent(bin)/Edet;
-//            hCrossSecProper->SetBinContent(k,xs);
-//            //double error = hCrossSec2->GetBinError(bin);
-//            //hCrossSecProper->SetBinError(k,error);
-//        }
-
-        TH1D *hCrossSecProper = (TH1D*) hCrossSec->Clone("hCrossSecProper");
-        hCrossSecProper->SetTitle("Total Cross Sections");
+        TH1D *hCrossSecProper = new TH1D("hCrossSecProper", "Total Cross Sections",450,0,450);
         hCrossSecProper->GetXaxis()->SetTitle("Incident Photon Energy (MeV)");
         hCrossSecProper->GetYaxis()->SetTitle("Total Cross Section (#mub)");
-        hCrossSecProper->Scale(1/GetTotDetEff(200));
 
-        // Create a canvas
+        // Fill the histogram with total cross section divided by Edet for the energies we have
+        for(int k=150; k<=350; k+=25)
+        {
+            double Edet = GetTotDetEff(k);
+            int bin = hCrossSec->GetXaxis()->FindBin(k);
+            double xs = hCrossSec->GetBinContent(bin)/Edet;
+            hCrossSecProper->SetBinContent(k,xs);
+            //double error = hCrossSec2->GetBinError(bin);
+            //hCrossSecProper->SetBinError(k,error);
+        }
+
+//        TH1D *hCrossSecProper = (TH1D*) hCrossSec->Clone("hCrossSecProper");
+//        hCrossSecProper->SetTitle("Total Cross Sections");
+//        hCrossSecProper->GetXaxis()->SetTitle("Incident Photon Energy (MeV)");
+//        hCrossSecProper->GetYaxis()->SetTitle("Total Cross Section (#mub)");
+//        hCrossSecProper->Scale(1/GetTotDetEff(200));
+
+        //Create a canvas
         TCanvas *c2 = new TCanvas("c2","",200,10,750,750);
-        c2->cd();
+        c2->Divide(2,2);
+        c2->cd(1);
+        hElastic->Draw("HIST");
+        c2->cd(2);
+        hScalars_final->Draw("HIST");
+        c2->cd(3);
+        hTaggEff_final->Draw("HIST");
+        c2->cd(4);
         hCrossSecProper->Draw("HIST");
 
 

@@ -194,7 +194,7 @@ double GetScalingFactor(int ke, TFile *ftFile, TFile *etFile)
         TH1D *hRatio_conv = TaggChanToEnergy("Tagger_Conversions_by_k_2019_06.txt",hRatio);
 	
         // Get factor for this energy
-        double factor = hRatio_conv->GetBinContent(ke);
+        double factor = hRatio_conv->GetBinContent(hRatio_conv->GetXaxis()->FindBin(ke));
 
 	return factor;
 }
@@ -239,9 +239,20 @@ int GetCounts(int ke, int th)
             double scale = GetScalingFactor(ke, ftFile, etFile);
 
 
+
+       int thbin = hFull_ME_3D_conv->GetYaxis()->FindBin(th);
+       int kebin = hFull_ME_3D_conv->GetZaxis()->FindBin(ke);
+       int kebin_l = hFull_ME_3D_conv->GetZaxis()->FindBin(ke-1);
+       int kebin_h = hFull_ME_3D_conv->GetZaxis()->FindBin(ke+1);
+
+       cout << "thbin: " << thbin << endl;
+       cout << "kebin: " << kebin << endl;
+       cout << "kebin_l: " << kebin_l << endl;
+       cout << "kebin_h: " << kebin_h << endl;
+
         // Project 3D histograms at input Tagger channel
-        TH1D *hFull_ME_projx = hFull_ME_3D_conv->ProjectionX(Form("hME_projx_%dMeV",ke),th,th+1,ke-1,ke+1);
-        TH1D *hEmpty_ME_projx = hEmpty_ME_3D_conv->ProjectionX(Form("hEmpty_ME_projx_%dMeV",ke),th,th+1,ke-1,ke+1);  // maybe these should be th, th+1 ...
+        TH1D *hFull_ME_projx = hFull_ME_3D_conv->ProjectionX(Form("hME_projx_%dMeV",ke),thbin,thbin+1,kebin-1,kebin+1);
+        TH1D *hEmpty_ME_projx = hEmpty_ME_3D_conv->ProjectionX(Form("hEmpty_ME_projx_%dMeV",ke),thbin,thbin+1,kebin-1,kebin+1);  // maybe these should be th, th+1 ...
 
 	// Subtract empty from full with scaling
         TH1D *hSubtracted = (TH1D*) hFull_ME_projx->Clone(Form("hSubtracted_%dMeV",ke));
@@ -263,26 +274,26 @@ int GetCounts(int ke, int th)
 
 	// Fit hSubtracted and save the parameters
         double param[6];
-        hSubtracted->Fit("fit");
+        hSubtracted->Fit("fit","Q");
 	fit->GetParameters(&param[0]);
 	
 	// Create a fit to mimic that which was fit to the elastic peak and integrate it
 	TF1 *fPeak = new TF1("fPeak", "gaus", -200, 200);
         double mean, sigma, constant;
-        cout << param[4] << " , " << param[1] << endl;
+        //cout << param[4] << " , " << param[1] << endl;
         if (param[4] > param[1])
         {
             mean = param[4];
             sigma = param[5];
             constant = param[3];
-            cout << "here" << endl;
+            //cout << "here" << endl;
         }
         else
            {
             mean = param[1];
             sigma = param[2];
             constant = param[0];
-            cout << "computers are evil" << endl;
+            //cout << "computers are evil" << endl;
         }
         fPeak->SetParameters(constant,mean,sigma);
         int counts = fPeak->Integral(-200,200);
@@ -301,13 +312,14 @@ int GetCounts(int ke, int th)
         TCanvas *c1 = new TCanvas("c1","",200,10,750,750);
         c1->cd();
         hSubtracted->Draw();
+
 //	}
 
-        cout << mean << endl;
+        //cout << mean << endl;
         if(counts < 0 || mean < -15)
         {
                 //counts = 0;
-                cout << Form("Bad -> energy: %d, theta: %d, counts: %d, mean: %f",ke,th,counts,mean) << endl;
+                //cout << Form("Bad -> energy: %d, theta: %d, counts: %d, mean: %f",ke,th,counts,mean) << endl;
         }
 
 

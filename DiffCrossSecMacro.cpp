@@ -195,7 +195,7 @@ double GetScalingFactor(int ke, TFile *ftFile, TFile *etFile)
         TH1D *hRatio_conv = TaggChanToEnergy("Tagger_Conversions_by_k_2019_06.txt",hRatio);
 	
         // Get factor for this energy
-        double factor = hRatio_conv->GetBinContent(ke);
+        double factor = hRatio_conv->GetBinContent(hRatio_conv->GetXaxis()->FindBin(ke));
 
 	return factor;
 }
@@ -212,9 +212,19 @@ double GetScalingFactor(int ke, TFile *ftFile, TFile *etFile)
 int GetCounts(int ke, int th, TH3* hFull_ME_3D_conv, TH3* hEmpty_ME_3D_conv, double scale)
 {
 
+        int thbin = hFull_ME_3D_conv->GetYaxis()->FindBin(th);
+        int kebin = hFull_ME_3D_conv->GetZaxis()->FindBin(ke);
+
+
+
+
         // Project 3D histograms at input Tagger channel
-        TH1D *hFull_ME_projx = hFull_ME_3D_conv->ProjectionX(Form("hME_projx_%dMeV",ke),th,th+1,ke-1,ke+1);
-        TH1D *hEmpty_ME_projx = hEmpty_ME_3D_conv->ProjectionX(Form("hEmpty_ME_projx_%dMeV",ke),th,th+1,ke-1,ke+1);  // maybe these should be th, th+1 ...
+        /*TH1D *hFull_ME_projx = hFull_ME_3D_conv->ProjectionX(Form("hME_projx_%dMeV",ke),th,th+1,ke-1,ke+1);
+        TH1D *hEmpty_ME_projx = hEmpty_ME_3D_conv->ProjectionX(Form("hEmpty_ME_projx_%dMeV",ke),th,th+1,ke-1,ke+1);*/  // maybe these should be th, th+1 ...
+        TH1D *hFull_ME_projx = hFull_ME_3D_conv->ProjectionX(Form("hME_projx_%dMeV",ke),thbin,thbin+1,kebin,kebin+1);
+        TH1D *hEmpty_ME_projx = hEmpty_ME_3D_conv->ProjectionX(Form("hEmpty_ME_projx_%dMeV",ke),thbin,thbin+1,kebin,kebin+1);
+
+
 
 	// Subtract empty from full with scaling
         TH1D *hSubtracted = (TH1D*) hFull_ME_projx->Clone(Form("hSubtracted_%dMeV",ke));
@@ -349,7 +359,7 @@ TH1D* GetDXS(int ke=200)
     for (int th=0; th<=18; th++) // only 18 theta bins made by Ant
     {
 
-            int counts = GetCounts(ke,th,hFull_ME_3D_conv,hEmpty_ME_3D_conv, scale);  // get the pi0 yield for the channel and theta --> currently the problem of channels
+            int counts = GetCounts(ke,th*10,hFull_ME_3D_conv,hEmpty_ME_3D_conv, scale);  // get the pi0 yield for the channel and theta --> currently the problem of channels
             for (int i=0; i<=counts; i++)
             {
                 hElastic->Fill(th*10);   // fill the yield histogram for every count pi0 we counted at that channel
@@ -415,25 +425,25 @@ TH1D* GetDXS(int ke=200)
 
 
 
-//    cout << Form("For %dMeV: \n"
-//                 "Tagger Scalars: %f \n"
-//                 "Tagg Eff: %f \n"
-//                 "Target Thickness: %f \n \n",
-//                 ke, scalars, taggeff, tt);
+    cout << Form("For %dMeV: \n"
+                 "Tagger Scalars: %f \n"
+                 "Tagg Eff: %f \n"
+                 "Target Thickness: %f \n \n",
+                 ke, scalars, taggeff, tt);
 
-//    for (int th=0; th<180; th=th+10)
-//    {
-//    cout << Form("For theta = %d: \n"
-//                 "Counts: %f \n"
-//                 "Det Eff: %f \n"
-//                 "Solid Angle: %f \n \n",
-//                 th,
-//                 hElastic->GetBinContent(hElastic->GetXaxis()->FindBin(th)),
-//                 hDetEff->GetBinContent(hDetEff->GetXaxis()->FindBin(th)),
-//                 hSolidAng->GetBinContent(hSolidAng->GetXaxis()->FindBin(th)));
-//    }
+    for (int th=0; th<180; th=th+10)
+    {
+    cout << Form("For theta = %d: \n"
+                 "Counts: %f \n"
+                 "Det Eff: %f \n"
+                 "Solid Angle: %f \n \n",
+                 th,
+                 hElastic->GetBinContent(hElastic->GetXaxis()->FindBin(th)),
+                 hDetEff->GetBinContent(hDetEff->GetXaxis()->FindBin(th)),
+                 hSolidAng->GetBinContent(hSolidAng->GetXaxis()->FindBin(th)));
+    }
 
-//    cout << Form("Total Cross Section should be: %f \n", hDXS->Integral());
+    cout << Form("Total Cross Section should be: %f \n", hDXS->Integral());
 
 
 
