@@ -5,10 +5,10 @@
 //  Jenna Chisholm                                                           //
 //  October 7, 2020                                                          //
 //                                                                           //
-//  Last Updated: February 10, 2021                                          //
+//  Last Updated: March 19, 2021                                             //
 //                                                                           //
-//  Calculates differential cross sections at 150, 175, 200, 225, 250, 275,  //
-//  300, 325, and 350MeV.                                                    //
+//  Calculates differential cross sections for neutral pion production at    //
+//  150, 175, 200, 225, 250, 275, 300, 325, and 350MeV.                      //
 //                                                                           //
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -160,7 +160,7 @@ TH3* Tagg_Chan_To_Ener(TString sFile, TH3 *hChan, TString sAxis="X")
 TH1D* GetTotDetEff(int ke)
 {
     // Open file
-    TFile *edetFile = TFile::Open(Form("DetEff/DetEff_%d.root",ke));
+    TFile *edetFile = TFile::Open(Form("DetEff/DetEff_%d_FinalB.root",ke));
     if(!edetFile->IsOpen())
     {
             cout << "Error: detection efficiency file could not be opened.";
@@ -211,20 +211,16 @@ double GetScalingFactor(int ke, TFile *ftFile, TFile *etFile)
 // Currently: these histograms are being plotted and I don't know why or how
 int GetCounts(int ke, int th, TH3* hFull_ME_3D_conv, TH3* hEmpty_ME_3D_conv, double scale)
 {
-
+        // Get bin numbers for desired ranges
         int thbin = hFull_ME_3D_conv->GetYaxis()->FindBin(th);
-        int kebin = hFull_ME_3D_conv->GetZaxis()->FindBin(ke);
+        int kebin_l = hFull_ME_3D_conv->GetZaxis()->FindBin(ke-5);
+        int kebin_h = hFull_ME_3D_conv->GetZaxis()->FindBin(ke+5);
 
-
-
-
-        // Project 3D histograms at input Tagger channel
+        // Project 3D histograms at input energy range and theta
         /*TH1D *hFull_ME_projx = hFull_ME_3D_conv->ProjectionX(Form("hME_projx_%dMeV",ke),th,th+1,ke-1,ke+1);
         TH1D *hEmpty_ME_projx = hEmpty_ME_3D_conv->ProjectionX(Form("hEmpty_ME_projx_%dMeV",ke),th,th+1,ke-1,ke+1);*/  // maybe these should be th, th+1 ...
-        TH1D *hFull_ME_projx = hFull_ME_3D_conv->ProjectionX(Form("hME_projx_%dMeV",ke),thbin,thbin+1,kebin,kebin+1);
-        TH1D *hEmpty_ME_projx = hEmpty_ME_3D_conv->ProjectionX(Form("hEmpty_ME_projx_%dMeV",ke),thbin,thbin+1,kebin,kebin+1);
-
-
+        TH1D *hFull_ME_projx = hFull_ME_3D_conv->ProjectionX(Form("hME_projx_%dMeV",ke),thbin,thbin,kebin_l,kebin_h);
+        TH1D *hEmpty_ME_projx = hEmpty_ME_3D_conv->ProjectionX(Form("hEmpty_ME_projx_%dMeV",ke),thbin,thbin,kebin_l,kebin_h);
 
 	// Subtract empty from full with scaling
         TH1D *hSubtracted = (TH1D*) hFull_ME_projx->Clone(Form("hSubtracted_%dMeV",ke));
@@ -252,7 +248,7 @@ int GetCounts(int ke, int th, TH3* hFull_ME_3D_conv, TH3* hEmpty_ME_3D_conv, dou
 	// Create a fit to mimic that which was fit to the elastic peak and integrate it
 	TF1 *fPeak = new TF1("fPeak", "gaus", -200, 200);
         double mean, sigma, constant;
-        if (param[4] > param[1])
+        if (param[4] > param[1]) // make sure you're choosing the right Gaussian
         {
             mean = param[4];
             sigma = param[5];
@@ -289,15 +285,18 @@ int GetCounts(int ke, int th, TH3* hFull_ME_3D_conv, TH3* hEmpty_ME_3D_conv, dou
 // The main function that calculates the elastic counts at several photon energies and plots them,
 // and then calculates the total cross section
 TH1D* GetDXS(int ke=200)
+//void GetDXS(int ke=200)
 {
     // --------------------------- Open Files --------------------------- //
 
     // Full target file
-    TFile *ftFile = TFile::Open("Full_Target_Result_2.root");
+    //TFile *ftFile = TFile::Open("Full_Target_Result_2.root");
+    TFile *ftFile = TFile::Open("He4Pi0_Full_FinalB.root");
     if(!ftFile->IsOpen()){cout << "Error: full target file could not be opened."; exit(-1);}
 
     // Empty target file
-    TFile *etFile = TFile::Open("Empty_Target_Result_2.root");
+   // TFile *etFile = TFile::Open("Empty_Target_Result_2.root");
+    TFile *etFile = TFile::Open("He4Pi0_Empty_FinalB.root");
     if(!etFile->IsOpen()){cout << "Error: empty target file could not be opened.";exit(-1);}
 
     // Tagging Efficiency File
@@ -328,19 +327,13 @@ TH1D* GetDXS(int ke=200)
     // ------------------- Calculate Target Thickness ------------------- //
 
     // Calculate target thickness
-    const double length = 0.05;                     // ~5cm?
+    const double length = 0.053;                     // ~5.3cm?
     const double density = 124640;                  // g/m3, found on the ELOG, corresponds to 1018mbar pressure?
     const double NA = 6.022*TMath::Power(10,23);    // Avogadro's number (/mol)
     const double mm = 4.002602;                     // should be molar mass of helium-4 (g/mol)
     const double tt = length*density*NA/mm;
 
-
-    // ------------- Get the Yield of Elastic Pi0 Production ------------- //
-
-    // Create a histogram to fill
-    TH1D *hElastic = new TH1D("hElastic", Form("Counts of Elastic Pi0 Production for KE=%dMeV",ke),18,0,180);
-    hElastic->GetXaxis()->SetTitle("#theta");
-    hElastic->GetYaxis()->SetTitle("Counts");
+    // -------------------- Get 3D Histograms and Convert -------------------- //
 
     // Get 3D, 1 particle event ME Histograms
     TH3D *hFull_ME_3D = (TH3D*)ftFile->Get("He4Pi0/h3D_MEpi0");
@@ -351,29 +344,32 @@ TH1D* GetDXS(int ke=200)
     TH3 *hEmpty_ME_3D_conv = Tagg_Chan_To_Ener("Tagger_Conversions_by_k_2019_06.txt",hEmpty_ME_3D,"Z");
 
 
+    // ------------- Get the Yield of Elastic Pi0 Production ------------- //
+
+    // Create a histogram to fill
+    TH1D *hElastic = new TH1D("hElastic", Form("Counts of Elastic Pi0 Production for KE=%d MeV",ke),18,0,180);
+    hElastic->GetXaxis()->SetTitle("#theta");
+    hElastic->GetYaxis()->SetTitle("Counts");
+
+
     // Get scaling factor
     double scale = GetScalingFactor(ke, ftFile, etFile);
 
+    int yield[18];
+
     // Go through the theta and fill the histogram
-    // Need to find out how to associate an energy with a channel ..., using 112 for 200MeV for now
-    for (int th=0; th<=18; th++) // only 18 theta bins made by Ant
+    for (int th=0; th<18; th++) // only 18 theta bins made by Ant
     {
 
-            int counts = GetCounts(ke,th*10,hFull_ME_3D_conv,hEmpty_ME_3D_conv, scale);  // get the pi0 yield for the channel and theta --> currently the problem of channels
+            int counts = GetCounts(ke,th*10,hFull_ME_3D_conv,hEmpty_ME_3D_conv, scale);  // get the pi0 yield for the energy (+/-5 MeV) and theta
             for (int i=0; i<=counts; i++)
             {
                 hElastic->Fill(th*10);   // fill the yield histogram for every count pi0 we counted at that channel
             }
-          /*  for (int ch=100; ch<=200; ch++)
-            {
-                int counts2 = GetCounts(ch,th,ftFile,etFile);
-                for (int i=0; i<=counts2; i++)
-                {
-                    hCounts->Fill(th*10,ch);   // fill the yield histogram for every count pi0 we counted at that channel
-                    cout << "ch: " << ch << ", th: " << th << endl;
-                }
-            }*/
+            yield[th] = counts;  // Save the yield for error calculations later
     }
+    //hElastic->Sumw2();
+
 
 
 
@@ -396,7 +392,7 @@ TH1D* GetDXS(int ke=200)
 
     // ------------------------- Get Solid Angle ------------------------- // = 2pi int sintheta dtheta
     TH1D *hSolidAng = new TH1D("hSolidAng", "Solid Angle",18,0,180);
-    hSolidAng->GetXaxis()->SetTitle("#theta");
+    hSolidAng->GetXaxis()->SetTitle("#theta (degrees)");
     hSolidAng->GetYaxis()->SetTitle("Solid Angle");
     TF1 *sinth = new TF1("sinth","sin(x)");
 
@@ -408,68 +404,91 @@ TH1D* GetDXS(int ke=200)
     }
     hSolidAng->Sumw2(0);
 
+    TCanvas *cA = new TCanvas("cA","",200,10,850,750);
+    hSolidAng->SetLineWidth(2);
+    hSolidAng->Draw();
+
+
+
+
     // --------------------- Get Detection Efficiency --------------------- //
 
     TH1D* hDetEff = GetTotDetEff(ke);
+    hDetEff->Sumw2(0);
 
 
     // ------------------ Get Differential Cross Section ------------------ //
 
 
     // Make a histogram for the differential cross section
-    TH1D *hDXS = new TH1D("hDXS", Form("Differential Cross Section at KE=%dMeV",ke),18,0,180);
-    hDXS->GetXaxis()->SetTitle("#theta");
+    TH1D *hDXS = new TH1D("hDXS", Form("Differential Cross Section at %d MeV #pm 5 MeV",ke),18,0,180);
+    hDXS->GetXaxis()->SetTitle("#theta (degrees)");
+    //hDXS->GetXaxis()->SetTitleSize(3);
     hDXS->GetYaxis()->SetTitle("Differential Cross Section (#mub)");
+    //hDXS->GetYaxis()->SetTitleSize(0.4);
     hDXS->Divide(hElastic,hSolidAng,TMath::Power(10,34),scalars*taggeff*tt); // yield*(conversion factor)/(solidangle*scalars*taggeff*thickness) //need deteff
     hDXS->Divide(hDetEff);
 
-
-
-    cout << Form("For %dMeV: \n"
-                 "Tagger Scalars: %f \n"
-                 "Tagg Eff: %f \n"
-                 "Target Thickness: %f \n \n",
-                 ke, scalars, taggeff, tt);
-
-    for (int th=0; th<180; th=th+10)
+    // Calculate error bars for differential cross section as \delta(dxs) = dxs/sqrt(Y)
+    double dxs=0;
+    double dxserr=0;
+    hDXS->Sumw2(0);
+    for (int thbin=1; thbin<18;thbin++)
     {
-    cout << Form("For theta = %d: \n"
-                 "Counts: %f \n"
-                 "Det Eff: %f \n"
-                 "Solid Angle: %f \n \n",
-                 th,
-                 hElastic->GetBinContent(hElastic->GetXaxis()->FindBin(th)),
-                 hDetEff->GetBinContent(hDetEff->GetXaxis()->FindBin(th)),
-                 hSolidAng->GetBinContent(hSolidAng->GetXaxis()->FindBin(th)));
+        dxs = hDXS->GetBinContent(thbin);
+        dxserr = dxs/TMath::Sqrt(yield[thbin]);
+	cout << "yield: " << yield[thbin] << ", error: " << dxserr << endl;
+        if (yield[thbin]==0){hDXS->SetBinError(thbin,0);}  // Need to set error to zero if there is no data
+        if (yield[thbin] != 0){hDXS->SetBinError(thbin,dxserr);}
     }
 
-    cout << Form("Total Cross Section should be: %f \n", hDXS->Integral());
+
+
+        //    cout << Form("For %dMeV: \n"
+        //                 "Tagger Scalars: %f \n"
+        //                 "Tagg Eff: %f \n"
+        //                 "Target Thickness: %f \n \n",
+        //                 ke, scalars, taggeff, tt);
+
+        //    for (int th=0; th<180; th=th+10)
+        //    {
+        //    cout << Form("For theta = %d: \n"
+        //                 "Counts: %f \n"
+        //                 "Det Eff: %f \n"
+        //                 "Solid Angle: %f \n \n",
+        //                 th,
+        //                 hElastic->GetBinContent(hElastic->GetXaxis()->FindBin(th)),
+        //                 hDetEff->GetBinContent(hDetEff->GetXaxis()->FindBin(th)),
+        //                 hSolidAng->GetBinContent(hSolidAng->GetXaxis()->FindBin(th)));
+        //    }
+
+        //    cout << Form("Total Cross Section should be: %f \n", hDXS->Integral());
 
 
 
+        //    // Plot differential cross section, and pieces
+        //    TCanvas *c3 = new TCanvas("c3","",200,10,750,1000);
+        //    c3->Divide(2,3);
+        //    c3->cd(1);
+        //    hElastic->Draw();
+        //    c3->cd(2);
+        //    hSolidAng->Draw();
+        //    c3->cd(3);
+        //    hDetEff->Draw();
+        //    c3->cd(4);
+        //    hTaggEff->Draw();
+        //    c3->cd(5);
+        //    hScalars->Draw();
+        //    c3->cd(6);
+        //    //hDXS->SetMarkerStyle(20);
+        //    //hDXS->SetMarkerSize(0.5);
+        //    hDXS->Draw();  //"E1"
 
 
-
-    // Plot differential cross section, and pieces
-/*    c3->Divide(2,3);
-    c3->cd(1);
-    hElastic->Draw();
-    c3->cd(2);
-    hSolidAng->Draw();
-    c3->cd(3);
-    hDetEff->Draw();
-    c3->cd(4);
-    hTaggEff->Draw();
-    c3->cd(5);
-    hScalars->Draw();
-    c3->cd(6);
-    hDXS->Draw();
-
-*/
 
     return hDXS;
     //return hElastic;
-
+    //return hDetEff;
 
 
 }
@@ -489,45 +508,40 @@ void PlotDXS()
     for(int i=0; i<=8; i++)
     {
         hDiffCrossSec[i] = GetDXS(ke);
+	hDiffCrossSec[i]->SetLineColor(kAzure-6);
+	hDiffCrossSec[i]->SetLineWidth(1);
+	//hDiffCrossSec[i]->SetMarkerStyle(8);
+	//hDiffCrossSec[i]->SetMarkerSize(0.5);
+	//hDiffCrossSec[i]->SetMarkerColor(kAzure);
         ke=ke+25;
     }
 
     // Create a canvas and draw the differential cross sections
-    TCanvas *c2 = new TCanvas("c2","",200,10,750,750);
+    TCanvas *c2 = new TCanvas("c2","",200,10,850,750);
     c2->Divide(3,3);
     c2->cd(1);
-    hDiffCrossSec[0]->SetLineColor(1);
-    hDiffCrossSec[0]->Draw("pfc");
+    hDiffCrossSec[0]->Draw();  //"pfc"
     c2->cd(2);
-    hDiffCrossSec[1]->SetLineColor(1);
-    hDiffCrossSec[1]->Draw("pfc");
+    hDiffCrossSec[1]->Draw();
     c2->cd(3);
-    hDiffCrossSec[2]->SetLineColor(1);
-    hDiffCrossSec[2]->Draw("pfc");
+    hDiffCrossSec[2]->Draw();
     c2->cd(4);
-    hDiffCrossSec[3]->SetLineColor(1);
-    hDiffCrossSec[3]->Draw("pfc");
+    hDiffCrossSec[3]->Draw();
     c2->cd(5);
-    hDiffCrossSec[4]->SetLineColor(1);
-    hDiffCrossSec[4]->Draw("pfc");
+    hDiffCrossSec[4]->Draw();
     c2->cd(6);
-    hDiffCrossSec[5]->SetLineColor(1);
-    hDiffCrossSec[5]->Draw("pfc");
+    hDiffCrossSec[5]->Draw();
     c2->cd(7);
-    hDiffCrossSec[6]->SetLineColor(1);
-    hDiffCrossSec[6]->Draw("pfc");
+    hDiffCrossSec[6]->Draw();
     c2->cd(8);
-    hDiffCrossSec[7]->SetLineColor(1);
-    hDiffCrossSec[7]->Draw("pfc");
+    hDiffCrossSec[7]->Draw();
     c2->cd(9);
-    hDiffCrossSec[8]->SetLineColor(1);
-    hDiffCrossSec[8]->Draw("pfc");
+    hDiffCrossSec[8]->Draw();
 
-
+//    TH1D *hDiffCrossSec = GetDXS(225);
     TCanvas *c3 = new TCanvas("c3","",200,10,750,750);
     c3->cd();
-    hDiffCrossSec[3]->SetLineColor(1);
-    hDiffCrossSec[3]->Draw("pfc");
+    hDiffCrossSec[5]->Draw();
 }
 
 

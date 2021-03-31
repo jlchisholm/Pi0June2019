@@ -33,7 +33,7 @@ void GetDetEff(int ke)
 	}
 
 	// Output file (from A2Geant4 and Ant)
-	TFile *antFile = TFile::Open(Form("MC_for_Edet/he4pi0_%d.root",ke));
+	TFile *antFile = TFile::Open(Form("MC_for_Edet/He4Pi0_%d_FinalB.root",ke));
 	if(!antFile->IsOpen())
 	{
 		cout << "Error: Ant file could not be opened.";
@@ -65,7 +65,7 @@ void GetDetEff(int ke)
 	hDetEff->Draw();
 
 	// Write and save detector efficiency
-	TFile *resultFile = new TFile(Form("DetEff_%d.root",ke),"RECREATE");
+	TFile *resultFile = new TFile(Form("DetEff_%d_FinalB.root",ke),"RECREATE");
 	hThetaIn->Write();
 	hThetaOut->Write();
 	hDetEff->Write();
